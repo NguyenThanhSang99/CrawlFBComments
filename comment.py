@@ -1,3 +1,4 @@
+import sys, getopt
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import os
@@ -20,10 +21,11 @@ def writeFileTxt(fileName, content):
         f1.write(content + os.linesep)
 
 def initDriver():
-    CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
+    CHROMEDRIVER_PATH = './chromedriver.exe'
     WINDOW_SIZE = "1000,2000"
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.binary_location = "C:/Program Files (x86)/Google/Chrome Beta/Application/chrome.exe"
+    #chrome_options.add_argument("--headless")
     chrome_options.add_argument("--window-size=%s" % WINDOW_SIZE)
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('disable-infobars')
@@ -66,7 +68,7 @@ def checkLiveClone(driver):
             print("Live")
             return True
 
-        return False
+        return True
     except:
         print("Check Live Fail")
 
@@ -104,7 +106,7 @@ def checkLiveCookie(driver, cookie):
 
         return checkLiveClone(driver)
     except:
-        print("check live fail")
+        print("Page failed to live")
 
 
 def loginFacebookByCookie(driver ,cookie):
@@ -116,7 +118,7 @@ def loginFacebookByCookie(driver ,cookie):
             driver.execute_script(script)
             sleep(5)
     except:
-        print("loi login")
+        print("error when login")
 
 def outCookie(driver):
     try:
@@ -124,10 +126,10 @@ def outCookie(driver):
         script = "javascript:void(function(){ function deleteAllCookiesFromCurrentDomain() { var cookies = document.cookie.split(\"; \"); for (var c = 0; c < cookies.length; c++) { var d = window.location.hostname.split(\".\"); while (d.length > 0) { var cookieBase = encodeURIComponent(cookies[c].split(\";\")[0].split(\"=\")[0]) + '=; expires=Thu, 01-Jan-1970 00:00:01 GMT; domain=' + d.join('.') + ' ;path='; var p = location.pathname.split('/'); document.cookie = cookieBase + '/'; while (p.length > 0) { document.cookie = cookieBase + p.join('/'); p.pop(); }; d.shift(); } } } deleteAllCookiesFromCurrentDomain(); location.href = 'https://mbasic.facebook.com'; })();"
         driver.execute_script(script)
     except:
-        print("loi login")
+        print("error when login")
 
 
-def getContentComment(driver):
+def getContentComment(driver, fileName = 'comments.csv'):
     try:
         links = driver.find_elements_by_xpath('//a[contains(@href, "comment/replies")]')
         ids = []
@@ -137,16 +139,16 @@ def getContentComment(driver):
                 textCommentElement = driver.find_element_by_xpath(('//*[@id="' + takeLink.split('_')[1] + '"]/div/div[1]'))
                 if (takeLink not in ids):
                     print(textCommentElement.text)
-                    writeFileTxt('comments.csv', textCommentElement.text)
+                    writeFileTxt(fileName, textCommentElement.text)
                     ids.append(takeLink)
         return ids
     except:
-        print("error get link")
+        print("error getting comment link")
 
-def getAmountOfComments(driver,postId, numberCommentTake):
+def getAmountOfComments(driver,postId, numberCommentTake, fileName = 'comments.csv'):
     try:
         driver.get("https://mbasic.facebook.com/" + str(postId))
-        sumLinks = getContentComment(driver)
+        sumLinks = getContentComment(driver, fileName)
         while(len(sumLinks) < numberCommentTake):
             try:
                 nextBtn = driver.find_elements_by_xpath('//*[contains(@id,"see_next")]/a')
@@ -169,19 +171,41 @@ def getPostIds(driver, filePath = 'posts.csv'):
         for link in shareBtn:
             postId = link.get_attribute('href').split('sid=')[1].split('&')[0]
             if postId not in allPosts:
-                print(postId)
-                writeFileTxt(filePath, postId)
+                if (len(postId) > 15 and len(postId) < 50):
+                    writeFileTxt(filePath, postId)
 
 def getnumOfPostFanpage(driver, pageId, amount, filePath = 'posts.csv'):
     driver.get("https://touch.facebook.com/" + pageId)
-    while len(readData(filePath)) < amount:
+    writeFileTxt(filePath, "")
+    while len(readData(filePath)) < amount * 2:
         getPostIds(driver, filePath)
 
+def main(argv):
+    pageName = ''
+    totalPost = 0
+    try:
+        opts, args = getopt.getopt(argv,"hp:t:",["pname=","tpost="])
+    except getopt.GetoptError:
+        print('python comment.py -p <page name> -o <total post>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('python comment.py -p <page name> -o <total post>')
+            sys.exit()
+        elif opt in ("-p", "--pname"):
+            pageName = arg
+        elif opt in ("-t", "--tpost"):
+            totalPost = int(arg)
+    cookie = 'update-your-facebook-cookie'
+    driver = initDriver()
+    isLive = checkLiveCookie(driver, cookie)
 
-cookie = 'c_user=100034043707544; xs=28%3AC2zTXO3zh6Z7wA%3A2%3A1658049295%3A-1%3A6176;'
-driver = initDriver()
-isLive = checkLiveCookie(driver, cookie)
-if (isLive):
-    getnumOfPostFanpage(driver, 'thinhseu.official', 100, 'posts.csv')
-    for postId in readData('posts.csv'):
-        getAmountOfComments(driver, postId, 1000)
+    postFile = pageName + "_post.csv"
+    commentFile = pageName + "_comment.csv"
+    if (isLive):
+        getnumOfPostFanpage(driver, pageName, totalPost, postFile)
+        for postId in readData(postFile):
+            getAmountOfComments(driver, postId, 1000, commentFile)
+
+if __name__ == "__main__":
+   main(sys.argv[1:])
